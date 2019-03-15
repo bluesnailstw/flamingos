@@ -1,0 +1,118 @@
+version: "3"
+services:
+  redis:
+    restart: unless-stopped
+    image: "redis:latest"
+    networks:
+      - flamingos_net
+  postgres:
+    restart: unless-stopped
+    image: "postgres:10-alpine"
+    environment:
+      - POSTGRES_USER=flamingos
+      - POSTGRES_DB=flamingos
+      - POSTGRES_PASSWORD=flamingos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "7432:5432"
+    networks:
+      - flamingos_net
+  manager:
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    build:
+      context: ./
+      dockerfile: docker/manager.dockerfile
+    volumes:
+      - ./src/:/opt/run/flamingos/src
+      - ./data:/opt/run/flamingos/data
+    ports:
+      - "9022:22"
+      - "8080:80"
+    networks:
+      - flamingos_net
+  worker:
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+    build:
+      context: ./
+      dockerfile: docker/work.dockerfile
+    volumes:
+      - ./src/:/opt/run/flamingos/src
+    entrypoint: /opt/run/code/entrypoint_worker
+    networks:
+      - flamingos_net
+  beat:
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - worker
+    build:
+      context: ./
+      dockerfile: docker/work.dockerfile
+    volumes:
+      - ./src/:/opt/run/flamingos/src
+    entrypoint: /opt/run/code/entrypoint_beat
+    networks:
+      - flamingos_net
+  worker_web:
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - worker
+      - beat
+      - manager
+    build:
+      context: ./
+      dockerfile: docker/work.dockerfile
+    volumes:
+      - ./src/:/opt/run/flamingos/src
+    ports:
+      - "8001:8000"
+    entrypoint: /opt/run/code/entrypoint_worker_web
+    networks:
+      - flamingos_net
+  build_ui:
+    restart: unless-stopped
+    build:
+      context: ./
+      dockerfile: docker/web_build.dockerfile
+    volumes:
+      - ./src/web:/opt/run/flamingos/src/web
+    networks:
+      - flamingos_net
+  master:
+    restart: unless-stopped
+    build:
+      context: ./
+      dockerfile: docker/master.dockerfile
+    volumes:
+      - ./data:/srv/data
+    networks:
+      - flamingos_net
+  minion:
+    restart: unless-stopped
+    depends_on:
+      - master
+    build:
+      context: ./
+      dockerfile: test/minion.dockerfile
+    networks:
+      - flamingos_net
+
+volumes:
+  pgdata:
+    driver: local
+  saltdata:
+    driver: local
+
+networks:
+  flamingos_net:
+

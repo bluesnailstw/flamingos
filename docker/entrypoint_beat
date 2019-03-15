@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+cd /opt/run/flamingos/src
+celery  -A manager beat -S django -l info
